@@ -1,6 +1,7 @@
 import random
 from functools import total_ordering
 from itertools import product
+
 import gym
 from gym import spaces, utils
 from gym.error import InvalidAction
@@ -35,11 +36,14 @@ class Card:
             rank = str (self.rank)
         return rank + self.suit
     
+    def __hash__(self):
+        return hash((self.rank, self.suit))
+    
     def __eq__ (self, other):
         return (self.rank == other.rank) and (self.suit == other.suit)
     
     def __ne__ (self, other):
-        return (self.rank != other.rank) or (self.suit != other.suit)
+        return not self.__eq__(other)
     
     def __lt__ (self, other):
         if self.suit != other.suit:
@@ -49,15 +53,16 @@ class Card:
 
 class Deck:
     def __init__(self):
-        self.deck = list(map(lambda x: Card(rank=x[0], suit=x[1]), product(Card.ranks, Card.suits)))
+        self.deck = list(map(lambda x: Card(rank=x[0], suit=x[1]), 
+                        product(Card.ranks, Card.suits)))
         self.shuffle()
     
     def shuffle(self):
         random.shuffle(self.deck)
-
+    
     def is_empty(self):
         return len(self.deck) == 0
-
+    
     def deal(self):
         if self.is_empty():
             return None
@@ -69,51 +74,60 @@ class Deck:
 
 class BridgeEnv(gym.Env):
 
-    def __init__(self, opponent, start=0):
-        self.deck = Deck()
-        self.player_hands = [[] for i in range(4)]
-        self.you, self.opponent = (0,2), (1,3)
+    def __init__(self, starting_player):
+        self.trick_history = []
+        self.current_trick = []
+        self.hands = {'op1': [], 'op2': [], 't1': [], 't2': []}
         self._deal()
     
     def _deal(self):
-        self.player_hands = [[] for i in range(4)]
-        
         index = 0
-        while not self.deck.is_empty():
-            self.player_hands[index].append(self.deck.deal())
-            index = (index+1) % 4
+        players = ['op1', 'op2', 't1', 't2']
+        self.hands = {'op1': [], 'op2': [], 't1': [], 't2': []}
 
+        while not self.deck.is_empty():
+            self.hands[players[index]].append(self.deck.deal())
+            index = (index+1) % 4
+    
     def reset(self):
-        self.deck = Deck()
+        self.trick_history = []
+        self.current_trick = []
         self._deal()
 
     def step(self, action):
-        pass
+        """
+        Action must be an object with the following attributes:
+            - player = 'op1', 'op2', 't1', or 't2'
+            - card = some card object, must be in player's hand at that point
+        
+        Returns a 4-tuple of (observation, reward, termination, info)
+        Info field is empty for now
+        """
+        player = action['player']
+        card = action['card']
 
-    def round(self):
-        self.pile = []
-        self.game = True
-        while game:
-            for i in range(0,len(self.all_cards)):
-                self.random_int = random.randint(0,len(self.all_cards[i]) + 1)
-                self.random_card = self.all_cards[i][self.random_int]
-                if self.random_card in self.all_cards[i]:
-                    self.pile.append(self.random_card)
-                    self.all_cards[i].pop(self.random_int)
-            
-            base_card = self.pile[0]
-            index = self.pile.index(base_card) 
-            for j in range(1,len(self.pile)):
-                curr_card = self.pile[j]
-                #need to write the equalities for this 
-                if curr_card < base_card:
-                    index = self.pile.index(curr_card) 
-            self.all_tricks.append(index)
+        self.current_trick.append((player, card))
 
-            self.done = True
-            for k in range(0,len(self.all_cards)):
-                if len(self.all_cards[i] != 0):
-                    self.done = False
+        #remove the played card from appropriate player's hand
+        player_hand = self.hands[player]
+        player_hand.pop(player_hand.index(card))
+
+        if len(self.current_trick) == 4:
+            #trick done, add it to history
+            self.trick_history.append(self.current_trick)
+
+            #determine the winner
+            current_trick_sorted = sorted(self.current_trick, key=lambda x: x[1], 
+                                        reverse=True)
+            trick_winner = current_trick_sorted[0][0]
+
+            #now determine if the round is over
+            for p in self.hands:
+                if len(self.hands[p]) > 0:
+                    return (trick_winner, -1, False, {})
             
-            if not self.done:
-                self.game = False
+            #at this point, the entire round is over
+            return (None, -1, None, {})
+            
+        else:
+            return (None, 0, False, {})
