@@ -73,35 +73,64 @@ class Deck:
         return ', '.join(map(lambda x: str(x), self.deck))
 
 class BridgeEnv(gym.Env):
-
-    def __init__(self, starting_player):
+    """
+    This environment doesn't exactly fit the OpenAI Gym API 
+    """
+    def __init__(self, players, bid_level, bid_trump, bid_team):
+        """
+        bid_level - number of tricks ( > 6) that bidder bets on taking
+        bid_trump - the trump suit of this round's bid
+        bid_maker - which side made the bid (either 0 or 1)
+        """
+        self.bid_level = bid_level
+        self.bid_trump = bid_trump
+        self.bid_team = bid_team
+        
         self.trick_history = []
         self.current_trick = []
-        self.hands = {'op1': [], 'op2': [], 't1': [], 't2': []}
+        self.trick_winner = None
+        self.round_over = False
+        self.team0_num_tricks = 0
+        self.team1_num_tricks = 0
+        self.team0_score = None 
+        self.team1_score = None
+
+        self.hands = {'p_00': [], 'p_01': [], 'p_10': [], 'p_11': []}
         self._deal()
     
     def _deal(self):
         index = 0
-        players = ['op1', 'op2', 't1', 't2']
-        self.hands = {'op1': [], 'op2': [], 't1': [], 't2': []}
+        players = ['p_00', 'p_01', 'p_10', 'p_11']
+        self.hands = {'p_00': [], 'p_01': [], 'p_10': [], 'p_11': []}
 
         while not self.deck.is_empty():
             self.hands[players[index]].append(self.deck.deal())
             index = (index+1) % 4
-    
+
+    def _calculate_score(self):
+        """
+        Calculate the score achieved by both teams this round
+        Output: tuple of scores (team1, team2)
+        """
+        team0 = 0
+        team1 = 0
+
+        return None
+
+
     def reset(self):
         self.trick_history = []
         self.current_trick = []
         self._deal()
 
-    def step(self, action):
+    def play(self, action):
         """
         Action must be an object with the following attributes:
-            - player = 'op1', 'op2', 't1', or 't2'
+            - player = 'p_00', 'p_01', 'p_10', or 'p_11'
             - card = some card object, must be in player's hand at that point
         
-        Returns a 4-tuple of (observation, reward, termination, info)
-        Info field is empty for now
+        Updates the appropriate player's hand as well as trick history
+        All 4 agents call this method before "step" to get the appropriate reward
         """
         player = action['player']
         card = action['card']
@@ -112,22 +141,37 @@ class BridgeEnv(gym.Env):
         player_hand = self.hands[player]
         player_hand.pop(player_hand.index(card))
 
+        #if the trick is over, calculate the winner and add it to the history
         if len(self.current_trick) == 4:
-            #trick done, add it to history
+            current_trick_sorted = sorted(self.current_trick, key=lambda x: x[1], 
+                                    reverse=True)
+            
+            self.trick_winner = int(current_trick_sorted[0][0][2])
             self.trick_history.append(self.current_trick)
 
-            #determine the winner
-            current_trick_sorted = sorted(self.current_trick, key=lambda x: x[1], 
-                                        reverse=True)
-            trick_winner = current_trick_sorted[0][0]
+            if self.trick_winner == 0:
+                self.team0_num_tricks += 1
+            else:
+                self.team1_num_tricks += 1
+        
+        #if the round is over, calculate scores for each team based on the bid
+        if len(self.trick_history) == 13:
 
-            #now determine if the round is over
-            for p in self.hands:
-                if len(self.hands[p]) > 0:
-                    return (trick_winner, -1, False, {})
-            
-            #at this point, the entire round is over
-            return (None, -1, None, {})
-            
-        else:
-            return (None, 0, False, {})
+
+            self.round_over = True
+
+    def step(self, player):
+        """
+        player - one of 'p_00', 'p_01', 'p_10', or 'p_11'
+        returns 4-tuple of 
+        """
+        assert len(self.current_trick) == 4, "Trick not done!"
+
+        #now determine if the round is over
+        for p in self.hands:
+            if len(self.hands[p]) > 0:
+                return (trick_winner, 0, False, {})
+        
+        #at this point, the entire round is over
+        return (None, 0, None, {})
+          
