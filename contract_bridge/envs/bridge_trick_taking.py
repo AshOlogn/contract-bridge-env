@@ -107,16 +107,21 @@ class BridgeEnv(gym.Env):
             self.hands[players[index]].append(self.deck.deal())
             index = (index+1) % 4
 
-    def _calculate_score(self):
+    def _calculate_score(self, team):
         """
-        Calculate the score achieved by both teams this round
-        Output: tuple of scores (team1, team2)
+        Calculate the score achieved by the input team (0 or 1)
+        Output: integer score
         """
-        team0 = 0
-        team1 = 0
+        score = 0
+        n_tricks = self.team0_num_tricks if team == 0 else self.team1_num_tricks
 
-        return None
-
+        if self.bid_team == team:
+            if self.bid_trump is None:
+                return 0 if n_tricks == 0 else 10 + n_tricks*30
+            else:
+                return n_tricks*(30 if self.bid_trump in ('H', 'S') else 20)
+        else:
+            return 50*max(0, self.bid_level-n_tricks)
 
     def reset(self):
         self.trick_history = []
@@ -156,22 +161,18 @@ class BridgeEnv(gym.Env):
         
         #if the round is over, calculate scores for each team based on the bid
         if len(self.trick_history) == 13:
-
-
             self.round_over = True
+            self.team0_score = self._calculate_score(0)
+            self.team1_score = self._calculate_score(1)
 
     def step(self, player):
         """
         player - one of 'p_00', 'p_01', 'p_10', or 'p_11'
-        returns 4-tuple of 
         """
         assert len(self.current_trick) == 4, "Trick not done!"
 
-        #now determine if the round is over
-        for p in self.hands:
-            if len(self.hands[p]) > 0:
-                return (trick_winner, 0, False, {})
-        
-        #at this point, the entire round is over
-        return (None, 0, None, {})
+        if self.round_over:
+            return (None, self.team0_score if int(player[2])==0 else self.team1_score, True, None)
+        else:
+            return (None, 0, False, None)
           
