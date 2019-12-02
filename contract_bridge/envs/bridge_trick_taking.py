@@ -6,6 +6,8 @@ import gym
 from gym import spaces, utils
 from gym.error import InvalidAction
 
+MAX_TOTAL_CARDS = 52
+
 @total_ordering
 class Card:
     #12-14 is J, Q, K, A
@@ -51,10 +53,13 @@ class Card:
         else:
             return self.rank < other.rank
 
+
+
 class Deck:
     def __init__(self):
         self.deck = list(map(lambda x: Card(rank=x[0], suit=x[1]), 
                         product(Card.ranks, Card.suits)))
+        assert(len(self.deck) == MAX_TOTAL_CARDS)
         self.shuffle()
     
     def shuffle(self):
@@ -76,7 +81,7 @@ class BridgeEnv(gym.Env):
     """
     This environment doesn't exactly fit the OpenAI Gym API 
     """
-    def __init__(self, players, bid_level, bid_trump, bid_team):
+    def __init__(self, players, bid_level, bid_trump, bid_team, game):
         """
         bid_level - number of tricks ( > 6) that bidder bets on taking
         bid_trump - the trump suit of this round's bid
@@ -85,8 +90,17 @@ class BridgeEnv(gym.Env):
         self.bid_level = bid_level
         self.bid_trump = bid_trump
         self.bid_team = bid_team
+        self.game = game
+        self.action_space = spaces.Discrete(13)
+        #first 26 for your current hand. next 104 for your current team's trick history, next 104 for other team's trick history
+        self.observation_space = spaces.Tuple((
+            spaces.Discrete(26),
+            spaces.Discrete(208),
+            spaces.Discrete(2)))
         
         self.trick_history = []
+        self.team0_trick_history = []
+        self.team1_trick_history = []
         self.current_trick = []
         self.trick_winner = None
         self.round_over = False
@@ -96,6 +110,7 @@ class BridgeEnv(gym.Env):
         self.team1_score = None
 
         self.hands = {'p_00': [], 'p_01': [], 'p_10': [], 'p_11': []}
+        self.cards_played = {'p_00': [], 'p_01': [], 'p_10': [], 'p_11': []}
         self._deal()
     
     def _deal(self):
@@ -124,6 +139,8 @@ class BridgeEnv(gym.Env):
             return 50*max(0, self.bid_level-n_tricks)
 
     def reset(self):
+        #changes
+        self.hands = {'p_00': [], 'p_01': [], 'p_10': [], 'p_11': []}
         self.trick_history = []
         self.current_trick = []
         self._deal()
@@ -143,8 +160,9 @@ class BridgeEnv(gym.Env):
         self.current_trick.append((player, card))
 
         #remove the played card from appropriate player's hand
-        player_hand = self.hands[player]
-        player_hand.pop(player_hand.index(card))
+        self.player_hand = self.hands[player]
+        self.cards_played[player].append(layer_hand.index(card))
+        self.player_hand.pop(player_hand.index(card))
 
         #if the trick is over, calculate the winner and add it to the history
         if len(self.current_trick) == 4:
@@ -174,5 +192,12 @@ class BridgeEnv(gym.Env):
         if self.round_over:
             return (None, self.team0_score if int(player[2])==0 else self.team1_score, True, None)
         else:
-            return (None, 0, False, None)
+            player_current_state = [self.player_hand, self.current_trick, self.trick_history]
+            return (player_state, 0, False, None)
+
+    def get_observation(self):
+        #still need to work on this. Will do so tomorrow.
+        return Tuple([self.player_hand, self.cards_played self.current_trick, self.trick_history])
+
+
           
