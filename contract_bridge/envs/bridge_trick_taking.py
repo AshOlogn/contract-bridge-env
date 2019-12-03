@@ -91,7 +91,7 @@ class BridgeEnv(gym.Env):
         self.bid_trump = bid_trump
         self.bid_team = bid_team
         self.game = game
-        self.action_space = spaces.Discrete(13)
+        self.action_space = spaces.Discrete(1)
         #first 26 for your current hand. next 104 for your current team's trick history, next 104 for other team's trick history
         self.observation_space = spaces.Tuple((
             spaces.Discrete(26),
