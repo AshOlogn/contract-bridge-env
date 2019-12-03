@@ -16,16 +16,26 @@ class BridgeEnv(gym.Env):
         self.bid_level = bid_level
         self.bid_trump = bid_trump
         self.bid_team = bid_team
-        
+        self._init_variables()
+    
+    def reset(self):
+        self._init_variables()
+
+    def _init_variables(self):
         self.trick_history = []
         self.current_trick = []
         self.trick_winner = None
         self.round_over = False
+
+        #keep track of each team's score
         self.team0_num_tricks = 0
         self.team1_num_tricks = 0
         self.team0_score = None 
         self.team1_score = None
 
+        #some variables to keep track of the state representation given to neural networks
+        self.played_cards = {'p_00': [], 'p_01': [], 'p_10': [], 'p_11': []}
+        self.played_this_trick = {'p_00': None, 'p_01': None, 'p_10': None, 'p_11': None}
         self.hands = {'p_00': [], 'p_01': [], 'p_10': [], 'p_11': []}
         self._deal()
     
@@ -37,7 +47,7 @@ class BridgeEnv(gym.Env):
         while not self.deck.is_empty():
             self.hands[players[index]].append(self.deck.deal())
             index = (index+1) % 4
-
+    
     def _calculate_score(self, team):
         """
         Calculate the score achieved by the input team (0 or 1)
@@ -53,12 +63,7 @@ class BridgeEnv(gym.Env):
                 return n_tricks*(30 if self.bid_trump in ('H', 'S') else 20)
         else:
             return 50*max(0, self.bid_level-n_tricks)
-
-    def reset(self):
-        self.trick_history = []
-        self.current_trick = []
-        self._deal()
-
+    
     def play(self, action):
         """
         Action must be an object with the following attributes:
@@ -73,15 +78,17 @@ class BridgeEnv(gym.Env):
 
         self.current_trick.append((player, card))
 
-        #remove the played card from appropriate player's hand
+        #remove the played card from appropriate player's hand and set it 
+        #as their played card this trick
         player_hand = self.hands[player]
-        player_hand.pop(player_hand.index(card))
+        self.played_this_trick[player] = player_hand.pop(player_hand.index(card))
 
-        #if the trick is over, calculate the winner and add it to the history
+        #the trick is over
         if len(self.current_trick) == 4:
             current_trick_sorted = sorted(self.current_trick, key=lambda x: x[1], 
                                     reverse=True)
             
+            #calculate the winner and add it to the history
             self.trick_winner = int(current_trick_sorted[0][0][2])
             self.trick_history.append(self.current_trick)
 
@@ -89,7 +96,12 @@ class BridgeEnv(gym.Env):
                 self.team0_num_tricks += 1
             else:
                 self.team1_num_tricks += 1
-        
+
+            #now add each player's card to their respective histories
+            for p in self.played_this_trick:
+                self.played_cards[p].append(self.played_this_trick[p])
+                self.played_this_trick[p] = None
+                
         #if the round is over, calculate scores for each team based on the bid
         if len(self.trick_history) == 13:
             self.round_over = True
@@ -105,4 +117,4 @@ class BridgeEnv(gym.Env):
         if self.round_over:
             return (None, self.team0_score if int(player[2])==0 else self.team1_score, True, None)
         else:
-            return (None, 0, False, None)
+            return (None, 1 if int(player[2])==self.trick_winner else 0, False, None)
