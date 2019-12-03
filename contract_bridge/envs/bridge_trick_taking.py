@@ -175,4 +175,3 @@ class BridgeEnv(gym.Env):
             return (None, self.team0_score if int(player[2])==0 else self.team1_score, True, None)
         else:
             return (None, 0, False, None)
-          
