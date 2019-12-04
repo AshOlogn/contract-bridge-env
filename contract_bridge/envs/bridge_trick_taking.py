@@ -128,14 +128,12 @@ class BridgeEnv(gym.Env):
 
         #the bid that was made for this round
         bid = np.zeros((35,))
-        #print(bid.shape)
         bid[self.bid_index] = 1
 
         #whether this team or the opponent made the bid
         #index 0 is this team, 1 is the opponent
         team = int(player[2])
         bid_team = np.array([1,0] if self.bid_team==team else [0,1])
-        #print(bid_team.shape)
 
         #concatenate into 1 numpy array and convert into a PyTorch tensor
         concat_tuple = ((current_hand_vector, teammate_history_vector, left_history_vector, 
@@ -145,22 +143,20 @@ class BridgeEnv(gym.Env):
         print(concat_tuple)
         return Tensor(np.concatenate(concat_tuple))
 
-
-    def _get_teammate(self, player):
+    def get_teammate(self, player):
         players = ['p_00', 'p_11', 'p_01', 'p_10']
         index = players.index(player)
         return players[(index+2) % len(players)]
 
-    def _get_left_opponent(self, player):
+    def get_left_opponent(self, player):
         players = ['p_00', 'p_11', 'p_01', 'p_10']
         index = players.index(player)
         return players[(index-1) % len(players)]
 
-    def _get_right_opponent(self, player):
+    def get_right_opponent(self, player):
         players = ['p_00', 'p_11', 'p_01', 'p_10']
         index = players.index(player)
         return players[(index+1) % len(players)]
-
 
     def play(self, action):
         """

@@ -42,7 +42,7 @@ class SmartGreedyAgent(Agent):
         left_op_card = played_this_trick[left_op]
         right_op_card = played_this_trick[right_op]
 
-        if prob > self.e_greedy:
+        if prob > self.epsilon:
             if teammate_card is not None:
                 if left_op_card is not None and right_op_card is not None:
                     if teammate_card > max(left_op_card, right_op_card):
