@@ -5,13 +5,16 @@ from torch import Tensor
 import gym
 from gym import spaces, utils
 from gym.error import InvalidAction
-from deck import Card, Deck
+from .deck import Card, Deck
 
 class BridgeEnv(gym.Env):
     """
     This environment doesn't exactly fit the OpenAI Gym API
     """
-    def __init__(self, bid_level, bid_trump, bid_team):
+    def __init__(self):
+        pass
+    
+    def initialize(self, bid_level, bid_trump, bid_team):
         """
         bid_level - number of tricks ( > 6) that bidder bets on taking
         bid_trump - the trump suit of this round's bid
@@ -34,12 +37,18 @@ class BridgeEnv(gym.Env):
         for (rank,suit) in product(Card.ranks, Card.suits):
             self.card_to_index[Card(rank,suit,bid_trump)] = index
             index += 1
-
+        
+        #now create an array mapping cards to indices
+        self.index_to_card = []
+        for (rank,suit) in product(Card.ranks, Card.suits):
+            self.index_to_card.append(Card(rank,suit,bid_trump))
+        
+        self.index_to_card = sorted(self.index_to_card)
         self._init_variables()
-
-    def reset(self):
-        self._init_variables()
-
+    
+    def reset(self, bid_level, bid_trump, bid_team):
+        self.initialize(bid_level, bid_trump, bid_team)
+    
     def _init_variables(self):
         self.trick_history = []
         self.current_trick = []
@@ -214,6 +223,3 @@ class BridgeEnv(gym.Env):
             return (None, self.team0_score if int(player[2])==0 else self.team1_score, True, None)
         else:
             return (None, 1 if int(player[2])==self.trick_winner else 0, False, None)
-
-# env = BridgeEnv(bid_level=8, bid_trump=None, bid_team=1)
-# print(env.get_state('p_10'))

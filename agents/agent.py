@@ -27,7 +27,7 @@ class SmartGreedyAgent(Agent):
     def act(self):
         #see player's hand and randomly pick a card
         prob = np.random.rand()
-
+        
         hand = self.env.hands[self.pid]
         highest_played = sorted(list(map(lambda x: x[1], self.env.current_trick)))[-1]
 
@@ -80,4 +80,13 @@ def RandomAgent(Agent):
     
     def act(self):
         return random.choice(self.env.hands[self.pid])
-        
+  
+def NFSPAgent(Agent):
+    def __init(self, pid, env, dqn=DQN(), pg=PG()):
+        super().__init__(pid, env)
+        self.dqn = dqn
+        self.pg = pg
+    
+    def act(self):
+        pass
+    
