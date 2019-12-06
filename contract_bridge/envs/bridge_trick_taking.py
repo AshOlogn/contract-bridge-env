@@ -106,9 +106,9 @@ class BridgeEnv(gym.Env):
         Return the tensor representation of the state visible to each player
         This computation is broken up into stages and then concatenated at the end
         """
-        teammate = self._get_teammate(player)
-        left = self._get_left_opponent(player)
-        right = self._get_right_opponent(player)
+        teammate = self.get_teammate(player)
+        left = self.get_left_opponent(player)
+        right = self.get_right_opponent(player)
 
         #get current hand
         current_hand_vector = self.hands_vector[player]
@@ -149,7 +149,6 @@ class BridgeEnv(gym.Env):
             right_history_vector, teammate_current_trick, left_current_trick,
             right_current_trick, bid, bid_team))
         
-        print(concat_tuple)
         return Tensor(np.concatenate(concat_tuple))
 
     def get_teammate(self, player):
@@ -184,6 +183,8 @@ class BridgeEnv(gym.Env):
         #remove the played card from appropriate player's hand and set it
         #as their played card this trick
         player_hand = self.hands[player]
+        print(player_hand)
+        print(self.played_this_trick)
         self.played_this_trick[player] = player_hand.pop(player_hand.index(card))
         self.hands_vector[player][self.card_to_index[card]] = 0
 
@@ -206,6 +207,7 @@ class BridgeEnv(gym.Env):
                 self.played_cards[p].append(self.played_this_trick[p])
                 self.played_cards_vector[p][self.card_to_index[self.played_this_trick[p]]] = 1
                 self.played_this_trick[p] = None
+
 
         #if the round is over, calculate scores for each team based on the bid
         if len(self.trick_history) == 13:
