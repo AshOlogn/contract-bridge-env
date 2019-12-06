@@ -107,25 +107,29 @@ def train(n_episodes, env, epsilon = 0.1):
 
     # === configuration for saving ===
     max_to_keep = 10
+    train_freq = 1
+    rl_start = 10000
+    sl_start = 1000
 
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
 	#create policy/target networks (RL) for each of the 4 agents
 	p00_policy_model = DQN().to(device)
     p00_target_model = DQN().to(device)
-    p00_target_model.load_state_dict(current_model.state_dict())
+    p00_target_model.load_state_dict(p00_policy_model.state_dict())
 
     p01_policy_model = DQN().to(device)
     p01_target_model = DQN().to(device)
-    p01_target_model.load_state_dict(current_model.state_dict())
+    p01_target_model.load_state_dict(p01_policy_model.state_dict())
 
     p10_policy_model = DQN().to(device)
     p10_target_model = DQN().to(device)
-    p10_target_model.load_state_dict(current_model.state_dict())
+    p10_target_model.load_state_dict(p10_policy_model.state_dict())
 
     p11_policy_model = DQN().to(device)
     p11_target_model = DQN().to(device)
-    p11_target_model.load_state_dict(current_model.state_dict())
+    p11_target_model.load_state_dict(p11
+    	_policy_model.state_dict())
 
     #initialize pgn network (SL) for each player
     p00_pgn = Policy().to(device)
@@ -295,6 +299,44 @@ def train(n_episodes, env, epsilon = 0.1):
         	p11_episode_reward += reward11_tensor
 
         	#need to finish rest
+        	if done:
+        		p00_reward_list.append(p00_episode_reward)
+            	p01_reward_list.append(p01_episode_reward)
+            	p10_reward_list.append(p10_episode_reward)
+            	p11_reward_list.append(p11_episode_reward)
+
+            	p00_state_deque.clear()
+				p00_reward_deque.clear()
+				p00_action_deque.clear()
+
+				p01_state_deque.clear()
+				p01_reward_deque.clear()
+				p01_action_deque.clear()
+
+				p10_state_deque.clear()
+				p10_reward_deque.clear()
+				p10_action_deque.clear()
+
+				p11_state_deque.clear()
+				p11_reward_deque.clear()
+				p11_action_deque.clear()
+
+			if (len(p00_replay_buffer) > rl_start and len(p00_reservoir_buffer) > sl_start and episode % train_freq == 0):
+				pass
+				#need to compute loss
+
+
+			if episode % args.update_target == 0:
+	            p00_target_model.load_state_dict(p00_policy_model.state_dict())
+	            p01_target_model.load_state_dict(p01_policy_model.state_dict())
+	            p10_target_model.load_state_dict(p10_policy_model.state_dict())
+	            p11_target_model.load_state_dict(p11_policy_model.state_dict())
+
+	        #need to save files
+
+
+
+
 
 
 
