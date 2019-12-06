@@ -35,7 +35,7 @@ def train(n_episodes, env, epsilon=0.1):
 
     #p_01 is a teammate, the rest are opponents
     players = {}
-    players['p_01'] = SmartGreedyAgent('p_00', env)
+    players['p_01'] = SmartGreedyAgent('p_01', env)
     players['p_10'] = SmartGreedyAgent('p_10', env)
     players['p_11'] = SmartGreedyAgent('p_11', env)
 
@@ -62,10 +62,13 @@ def train(n_episodes, env, epsilon=0.1):
                     #dqn agent
                     prev_dqn_state = env.get_state('p_00')
 
+                    #E-greedy action selection
                     if random.random() < epsilon:
                         #random action (exploration)
-                        dqn_action = random.choice(env.hands['p_00'])
-                        return dqn_action
+                        random_action = random.choice(env.hands['p_00'])
+
+                        #why are we returning dqn_action
+                        env.play({'player': 'p_00', 'card': best_card})
                     else:
                         #get the dqn output
                         output = policy_dqn.forward(env.get_state('p_00'))
@@ -136,6 +139,7 @@ def train(n_episodes, env, epsilon=0.1):
 if __name__ == '__main__':
     env = gym.make('contract_bridge:contract-bridge-v0')
     env.initialize(8, None, 0)
+    train(env)
 
     # parser = argparse.ArgumentParser()
     # parser.add_argument("--episodes", default=100)
