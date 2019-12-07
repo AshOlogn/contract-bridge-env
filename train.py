@@ -10,11 +10,14 @@ from agents.agent import SmartGreedyAgent
 
 import click
 import random
+import os
 
 
 @click.command()
 @click.option("--n_episodes", type=int, default=1)
-def train(n_episodes, env, epsilon=0.1):
+def train(n_episodes, epsilon=0.1):
+    env = gym.make('contract_bridge:contract-bridge-v0')
+    env.initialize(8, None, 0)
 
     batch_size = 10000
     gamma = 0.999
@@ -35,14 +38,14 @@ def train(n_episodes, env, epsilon=0.1):
 
     #p_01 is a teammate, the rest are opponents
     players = {}
-    players['p_01'] = SmartGreedyAgent('p_00', env)
+    players['p_01'] = SmartGreedyAgent('p_01', env)
     players['p_10'] = SmartGreedyAgent('p_10', env)
     players['p_11'] = SmartGreedyAgent('p_11', env)
 
     #to determine ordering
     order = ['p_00', 'p_11', 'p_01', 'p_10']
 
-    for episode in n_episodes:
+    for episode in range(n_episodes):
 
         #create a new environment with a new random bid
         bid_level = random.randint(7,13)
@@ -62,13 +65,18 @@ def train(n_episodes, env, epsilon=0.1):
                     #dqn agent
                     prev_dqn_state = env.get_state('p_00')
 
+
+                    #E-greedy action selection
                     if random.random() < epsilon:
                         #random action (exploration)
-                        dqn_action = random.choice(env.hands['p_00'])
-                        return dqn_action
+                        best_card = random.choice(env.hands['p_00'])
+
+                        #why are we returning dqn_action
+                        env.play({'player': 'p_00', 'card': best_card})
+
                     else:
                         #get the dqn output
-                        output = policy_dqn.forward(env.get_state('p_00'))
+                        output = policy_dqn.forward(env.get_state('p_00').to(device))
 
                         #loop through hand and pick card with highest dqn output
                         hand = env.hands['p_00']
@@ -82,10 +90,11 @@ def train(n_episodes, env, epsilon=0.1):
                                 score = output[card_to_index[card]]
                         
                         env.play({'player': 'p_00', 'card': best_card})
+
                 else:
                     card = players[pid].act()
                     env.play({'player': pid, 'card': card})
-                
+                    
                 index = (index+1) % 4
             
             env.step('p_01')
@@ -94,6 +103,7 @@ def train(n_episodes, env, epsilon=0.1):
 
             #somehow implement dqn step
             (obs, reward, done, info) = env.step('p_00')
+            env.current_trick = []
             reward_tensor = torch.tensor([reward], device=device)
             next_dqn_state = env.get_state('p_00') 
             replay_memory.push(prev_dqn_state, dqn_action, reward_tensor, next_dqn_state)
@@ -132,10 +142,15 @@ def train(n_episodes, env, epsilon=0.1):
             target_dqn.load_state_dict(policy_dqn.state_dict())
             torch.save(policy_dqn.state_dict(), "models/policy-network-{}.pth".format(episode))
 
+    env.close()
+
 
 if __name__ == '__main__':
     env = gym.make('contract_bridge:contract-bridge-v0')
     env.initialize(8, None, 0)
+    if not os.path.exists("models"):
+        os.mkdir("models")
+    train()
 
     # parser = argparse.ArgumentParser()
     # parser.add_argument("--episodes", default=100)

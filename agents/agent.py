@@ -29,7 +29,7 @@ class SmartGreedyAgent(Agent):
         prob = np.random.rand()
         
         hand = self.env.hands[self.pid]
-        highest_played = sorted(list(map(lambda x: x[1], self.env.current_trick)))[-1]
+        highest_played = sorted(list(map(lambda x: x[1], self.env.current_trick)))[-1] if len(self.env.current_trick) != 0 else None
 
         #ids of other players
         teammate = self.env.get_teammate(self.pid)
@@ -68,6 +68,8 @@ class SmartGreedyAgent(Agent):
 
         play_card = None
         for card in hand_sorted:
+            print(card)
+            print(highest_op_card)
             if card > highest_op_card:
                 play_card = card
                 break
