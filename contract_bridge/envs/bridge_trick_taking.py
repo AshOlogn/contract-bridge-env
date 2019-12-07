@@ -1,11 +1,14 @@
 from itertools import product
 import numpy as np
 from torch import Tensor
+import random
 
 import gym
 from gym import spaces, utils
 from gym.error import InvalidAction
 from .deck import Card, Deck
+
+
 
 class BridgeEnv(gym.Env):
     """
@@ -13,7 +16,7 @@ class BridgeEnv(gym.Env):
     """
     def __init__(self):
         pass
-    
+
     def initialize(self, bid_level, bid_trump, bid_team):
         """
         bid_level - number of tricks ( > 6) that bidder bets on taking
@@ -23,10 +26,11 @@ class BridgeEnv(gym.Env):
         self.bid_level = bid_level
         self.bid_trump = bid_trump
         self.bid_team = bid_team
+        self.player_list = ['p_00', 'p_11', 'p_01', 'p_10']
 
         #calculate the index of the current bid
         self.bid_index = ['C','D','H','S', None].index(bid_trump)*7 + (bid_level-7)
-        
+
         #create a dictionary mapping cards to index
         suits_resorted = ['C','D','H','S']
         if bid_trump is not None:
@@ -37,17 +41,15 @@ class BridgeEnv(gym.Env):
         for (rank,suit) in product(Card.ranks, Card.suits):
             self.card_to_index[Card(rank,suit,bid_trump)] = index
             index += 1
-        
-        self._init_variables()
-    
-    def reset(self, bid_level, bid_trump, bid_team):
-        self.initialize(bid_level, bid_trump, bid_team)
-    
-    def _init_variables(self):
+
+        #now initialize relevant variables for starting state (beginning of round)
         self.trick_history = []
         self.current_trick = []
         self.trick_winner = None
         self.round_over = False
+
+        #determine the starting player
+        self.current_player = 'p_%d%d' % (bid_team, 1 if random.random() < 0.5 else 0)
 
         #keep track of each team's score
         self.team0_num_tricks = 0
@@ -66,6 +68,10 @@ class BridgeEnv(gym.Env):
             'p_10': np.zeros((52,)), 'p_11': np.zeros((52,))})
 
         self._deal()
+    
+
+    def reset(self, bid_level, bid_trump, bid_team):
+        self.initialize(bid_level, bid_trump, bid_team)
 
     def _deal(self):
         index = 0
@@ -166,19 +172,22 @@ class BridgeEnv(gym.Env):
             - player = 'p_00', 'p_01', 'p_10', or 'p_11'
             - card = some card object, must be in player's hand at that point
 
-        Updates the appropriate player's hand as well as trick history
+        Updates the apprpriate player's hand as well as trick history
         All 4 agents call this method before "step" to get the appropriate reward
         """
         player = action['player']
         card = action['card']
 
+        #make sure the player is the one who should be playing this turn
+        if player != self.current_player:
+            raise Exception("Player %s should play this turn, not player %s" % 
+                (self.current_player, player))
+        
         self.current_trick.append((player, card))
 
         #remove the played card from appropriate player's hand and set it
         #as their played card this trick
         player_hand = self.hands[player]
-        print(player_hand)
-        print(self.played_this_trick)
         self.played_this_trick[player] = player_hand.pop(player_hand.index(card))
         self.hands_vector[player][self.card_to_index[card]] = 0
 
@@ -201,7 +210,14 @@ class BridgeEnv(gym.Env):
                 self.played_cards[p].append(self.played_this_trick[p])
                 self.played_cards_vector[p][self.card_to_index[self.played_this_trick[p]]] = 1
                 self.played_this_trick[p] = None
+            
+            #the next player is the one who won this trick
+            self.current_player = current_trick_sorted[0][0]
 
+        else:
+            #if the trick isn't over, the next player is the next player in the list (mod 4, of course)
+            index = self.player_list.index(self.current_player)
+            self.current_player = self.player_list[(index+1) % 4]
 
         #if the round is over, calculate scores for each team based on the bid
         if len(self.trick_history) == 13:
