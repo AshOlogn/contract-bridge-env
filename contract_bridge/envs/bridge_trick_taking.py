@@ -26,7 +26,7 @@ class BridgeEnv(gym.Env):
 
         #calculate the index of the current bid
         self.bid_index = ['C','D','H','S', None].index(bid_trump)*7 + (bid_level-7)
-
+        
         #create a dictionary mapping cards to index
         suits_resorted = ['C','D','H','S']
         if bid_trump is not None:
