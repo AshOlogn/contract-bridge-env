@@ -13,18 +13,16 @@ import random
 import os
 
 @click.command()
-@click.option("--n_episodes", type=int, default=1000)
+@click.option("--n_episodes", type=int, default=10000)
 def train(n_episodes, epsilon=0.1):
-
     env = gym.make('contract_bridge:contract-bridge-v0')
-    env.initialize(8, None, 0)
 
-    batch_size = 100
+    batch_size = 2
     gamma = 0.999
     eps_start = 0.9
     eps_end = 0.05
     eps_decay = 200
-    target_update = 10 # update target network after 10 episodes
+    target_update = 1000 # update target network after 1000 episodes
     steps_done = 0
 
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
@@ -68,10 +66,8 @@ def train(n_episodes, epsilon=0.1):
                     #Epsilon-greedy action selection
                     if random.random() < epsilon:
                         #random action (exploration)
-                        best_card = random.choice(env.hands['p_00'])
-
-                        #why are we returning dqn_action
-                        env.play({'player': 'p_00', 'card': best_card})
+                        dqn_action = random.choice(env.hands['p_00'])
+                        env.play({'player': 'p_00', 'card': dqn_action})
 
                     else:
                         #get the dqn output
@@ -79,16 +75,15 @@ def train(n_episodes, epsilon=0.1):
 
                         #loop through hand and pick card with highest dqn output
                         hand = env.hands['p_00']
-                        card_to_index = env.card_to_index
 
-                        best_card = hand[0]
+                        dqn_action = hand[0]
                         score = output[0]
                         for card in hand[1:]:
-                            if output[card_to_index[card]] > score:
-                                best_card = card 
-                                score = output[card_to_index[card]]
+                            if output[env.card_to_index[card]] > score:
+                                dqn_action = card 
+                                score = output[env.card_to_index[card]]
                         
-                        env.play({'player': 'p_00', 'card': best_card})
+                        env.play({'player': 'p_00', 'card': dqn_action})
 
                 else:
                     card = players[pid].act()
@@ -98,18 +93,22 @@ def train(n_episodes, epsilon=0.1):
             env.step('p_10')
             env.step('p_11')
 
-            #somehow implement dqn step
             (obs, reward, done, info) = env.step('p_00')
+
+            if r== 12 and episode % 50 == 0:
+                print(reward)
+
             env.current_trick = []
             reward_tensor = torch.tensor([reward], device=device)
             next_dqn_state = env.get_state('p_00') 
-            replay_memory.push(prev_dqn_state, dqn_action, reward_tensor, next_dqn_state)
+            replay_memory.push(prev_dqn_state, dqn_action.to_tensor(), reward_tensor, next_dqn_state)
 
             if len(replay_memory) > batch_size:
                 #get transitions of size "batch_size"
                 transitions = replay_memory.sample(batch_size)
                 batch = Transition(*zip(*transitions))
-                mask = torch.tensor(tuple(map(lambda s: s is not None, batch.next_dqn_state)), device=device, dtype=torch.uint8)
+                mask = torch.tensor(tuple(map(lambda s: s is not None, batch.next_state)), 
+                    device=device, dtype=torch.uint8)
 
                 next_states = torch.cat([s for s in batch.next_state if s is not None])
                 state_batch = torch.cat(batch.state)
@@ -117,11 +116,12 @@ def train(n_episodes, epsilon=0.1):
                 action_batch = torch.cat(batch.action)
                 reward_batch = torch.cat(batch.reward)
                 
+                # print(policy_dqn(state_batch))
                 q_values = policy_dqn(state_batch).gather(1, action_batch)
                 
                 next_state_values = torch.zeros(batch_size, device=device)
                 next_state_values[mask] = target_dqn(next_states).max(1)[0].detach()
-                expected_q_values = (next_state_values * gamma) + reward_batch
+                expected_q_values = (next_state_values * gamma) + reward_batch.float()
 
                 #compute loss
                 loss = criterion(q_values, expected_q_values.unsqueeze(1))
@@ -133,7 +133,7 @@ def train(n_episodes, epsilon=0.1):
                 
                 optimizer.step()
         
-        print("Episode {} completed".format(episode))
+        #print("Episode {} completed".format(episode))
         # update the target network based on the current policy
         # also save the current policy network
         if episode % target_update == 0:

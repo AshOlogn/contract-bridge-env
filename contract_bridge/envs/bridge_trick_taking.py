@@ -8,8 +8,6 @@ from gym import spaces, utils
 from gym.error import InvalidAction
 from .deck import Card, Deck
 
-
-
 class BridgeEnv(gym.Env):
     """
     This environment doesn't exactly fit the OpenAI Gym API

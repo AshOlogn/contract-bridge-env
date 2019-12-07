@@ -1,12 +1,15 @@
 import random
 from functools import total_ordering
 from itertools import product
+import torch
 
 @total_ordering
 class Card:
     #12-14 is J, Q, K, A
     ranks = (2,3,4,5,6,7,8,9,10,11,12,13,14)
     suits = ('C','D','H','S')
+    suit_orders = {'C': ['D', 'H', 'S', 'C'], 'D': ['C', 'H', 'S', 'D'], 
+    'H': ['C', 'D', 'S', 'H'], 'S': ['C', 'D', 'H', 'S'], None: ['C', 'D', 'H', 'S']}
     
     def __init__(self, rank, suit, trump=None):
         if rank in Card.ranks:
@@ -21,6 +24,12 @@ class Card:
 
         #used when determining card precedence during each round
         self.trump = trump
+    
+    def to_tensor(self):
+        index = Card.suit_orders[self.trump].index(self.suit)*13 + (self.rank-2)
+        tensor = torch.zeros(52)
+        tensor[index] = 1
+        return tensor.long()
     
     def __str__(self):
         if (self.rank == 14):
@@ -64,6 +73,7 @@ class Card:
             return self.suit == self.trump        
 
 class Deck:
+
     def __init__(self, trump=None):
         self.trump = trump
         self.deck = list(map(lambda x: Card(rank=x[0], suit=x[1], trump=trump), 
