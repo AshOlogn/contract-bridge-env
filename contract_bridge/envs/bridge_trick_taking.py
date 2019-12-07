@@ -38,12 +38,6 @@ class BridgeEnv(gym.Env):
             self.card_to_index[Card(rank,suit,bid_trump)] = index
             index += 1
         
-        #now create an array mapping cards to indices
-        self.index_to_card = []
-        for (rank,suit) in product(Card.ranks, Card.suits):
-            self.index_to_card.append(Card(rank,suit,bid_trump))
-        
-        self.index_to_card = sorted(self.index_to_card)
         self._init_variables()
     
     def reset(self, bid_level, bid_trump, bid_team):
