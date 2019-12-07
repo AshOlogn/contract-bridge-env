@@ -51,7 +51,6 @@ class SmartGreedyAgent(Agent):
                     return min(hand)
         
         return self._play_worst_winning(hand, left_op_card, right_op_card)
-    
 
     def _get_highest_op_card(self, left_op_card, right_op_card):
         #when this function is called, we know at least 1 opponent has played a card

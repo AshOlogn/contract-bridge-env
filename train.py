@@ -12,14 +12,14 @@ import click
 import random
 import os
 
-
 @click.command()
-@click.option("--n_episodes", type=int, default=1)
+@click.option("--n_episodes", type=int, default=1000)
 def train(n_episodes, epsilon=0.1):
+
     env = gym.make('contract_bridge:contract-bridge-v0')
     env.initialize(8, None, 0)
 
-    batch_size = 10000
+    batch_size = 100
     gamma = 0.999
     eps_start = 0.9
     eps_end = 0.05
@@ -34,9 +34,9 @@ def train(n_episodes, epsilon=0.1):
 
     optimizer = optim.RMSprop(policy_dqn.parameters())
     criterion = nn.SmoothL1Loss()
-    replay_memory = ReplayMemory(5000)
+    replay_memory = ReplayMemory(50000)
 
-    #p_01 is a teammate, the rest are opponents
+    #DQN is p_00, p_01 is a teammate, the rest are opponents
     players = {}
     players['p_01'] = SmartGreedyAgent('p_01', env)
     players['p_10'] = SmartGreedyAgent('p_10', env)
@@ -47,26 +47,25 @@ def train(n_episodes, epsilon=0.1):
 
     for episode in range(n_episodes):
 
-        #create a new environment with a new random bid
+        #reset the environment with a new random bid
         bid_level = random.randint(7,13)
         bid_trump = random.choice(['C', 'D', 'H', 'S', None])
         bid_team = random.choice([0,1])
         env.reset(bid_level, bid_trump, bid_team)
 
         for r in range(13):
-            #for each round, randomly pick a starting player and go in a circle
-            index = random.randint(0,3)
             prev_dqn_state = None
             dqn_action = None
 
             for i in range(4):
-                pid = order[index]
+                #the environment tells us which player should go next
+                pid = env.current_player
+
                 if pid == 'p_00':
                     #dqn agent
                     prev_dqn_state = env.get_state('p_00')
 
-
-                    #E-greedy action selection
+                    #Epsilon-greedy action selection
                     if random.random() < epsilon:
                         #random action (exploration)
                         best_card = random.choice(env.hands['p_00'])
@@ -94,8 +93,6 @@ def train(n_episodes, epsilon=0.1):
                 else:
                     card = players[pid].act()
                     env.play({'player': pid, 'card': card})
-                    
-                index = (index+1) % 4
             
             env.step('p_01')
             env.step('p_10')
@@ -133,6 +130,7 @@ def train(n_episodes, epsilon=0.1):
                 loss.backward()
                 for param in policy_dqn.parameters():
                     param.grad.data.clamp_(-1, 1)
+                
                 optimizer.step()
         
         print("Episode {} completed".format(episode))
@@ -146,13 +144,12 @@ def train(n_episodes, epsilon=0.1):
 
 
 if __name__ == '__main__':
-    env = gym.make('contract_bridge:contract-bridge-v0')
-    env.initialize(8, None, 0)
+
+    #make sure directories exist to save models and performance logs
     if not os.path.exists("models"):
         os.mkdir("models")
+    
+    if not os.path.exists("logs"):
+        os.mkdir("logs")
+    
     train()
-
-    # parser = argparse.ArgumentParser()
-    # parser.add_argument("--episodes", default=100)
-    # args = parser.parse_args()
-    # train(args)
