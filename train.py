@@ -17,7 +17,7 @@ import os
 def train(n_episodes, epsilon=0.1):
     env = gym.make('contract_bridge:contract-bridge-v0')
 
-    batch_size = 2
+    batch_size = 5
     gamma = 0.999
     eps_start = 0.9
     eps_end = 0.05
@@ -75,6 +75,7 @@ def train(n_episodes, epsilon=0.1):
 
                         #loop through hand and pick card with highest dqn output
                         hand = env.hands['p_00']
+                        print(len(hand))
 
                         dqn_action = hand[0]
                         score = output[0]
