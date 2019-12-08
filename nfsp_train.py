@@ -30,7 +30,7 @@ def take_action(pid, env, prev_state, dqn_action, pgn_action, best):
             model_action = random.choice(env.hands[pid])
             env.play({'player': 'p_00', 'card': model_action})
         else:
-        	#get the dqn output. Regover this logic maybe
+        	#get the dqn output. Regover this logic maybe since it's a returned distribution.
 	        output = pgn_action.forward(env.get_state(pid))
 
 	        #loop through hand and pick card with highest output
@@ -78,6 +78,55 @@ def multi_step_reward(rewards, gamma):
         ret += reward * (gamma ** idx)
     return ret
 
+def rl_loss(policy, target, replay_buffer, p_optimizer):
+	transitions = replay_buffer.sample(batch_size)
+    batch = Transition(*zip(*transitions))
+    mask = torch.tensor(tuple(map(lambda s: s is not None, batch.next_dqn_state)), device=device, dtype=torch.uint8)
+
+    next_states = torch.cat([s for s in batch.next_state if s is not None])
+    state_batch = torch.cat(batch.state)
+    next_state_batch = torch.cat(batch.next_state)
+    action_batch = torch.cat(batch.action)
+    reward_batch = torch.cat(batch.reward)
+    
+    q_values = policy(state_batch).gather(1, action_batch)
+    
+    next_state_values = torch.zeros(batch_size, device=device)
+    next_state_values[mask] = target(next_states).max(1)[0].detach()
+    expected_q_values = (next_state_values * gamma) + reward_batch
+
+    #compute loss
+    loss = criterion(q_values, expected_q_values.unsqueeze(1))
+
+    p_optimizer.zero_grad()
+    loss.backward()
+    for param in policy_dqn.parameters():
+        param.grad.data.clamp_(-1, 1)
+    p_optimizer.step()
+
+    return loss
+
+def sl_loss(policy, target, replay_buffer, p_optimizer):
+	transitions = replay_buffer.sample(batch_size)
+    batch = Transition(*zip(*transitions))
+    mask = torch.tensor(tuple(map(lambda s: s is not None, batch.next_dqn_state)), device=device, dtype=torch.uint8)
+
+    next_states = torch.cat([s for s in batch.next_state if s is not None])
+    state_batch = torch.cat(batch.state)
+    next_state_batch = torch.cat(batch.next_state)
+    action_batch = torch.cat(batch.action)
+    reward_batch = torch.cat(batch.reward)
+
+    probs = policy(state_batch)
+    probs_with_actions = probs.gather(1, action_batch.unsqueeze(1))
+    log_probs = probs_with_actions.log()
+
+    loss = -1 * log_probs.mean()
+    
+    optimizer.zero_grad()
+    loss.backward()
+    optimizer.step()
+    return loss
 
 @click.command()
 @click.option("--n_episodes", type=int, default=1)
@@ -322,27 +371,53 @@ def train(n_episodes, env, epsilon = 0.1):
 				p11_action_deque.clear()
 
 			if (len(p00_replay_buffer) > rl_start and len(p00_reservoir_buffer) > sl_start and episode % train_freq == 0):
-				pass
-				#need to compute loss
+				#updating best responses
+				loss = rl_loss(p00_policy_model, p00_target_model, p00_replay_buffer, p00_rl_optimizer)
+            	p00_rl_loss_list.append(loss.item())
+
+            	loss = rl_loss(p01_policy_model, p01_target_model, p01_replay_buffer, p01_rl_optimizer)
+            	p01_rl_loss_list.append(loss.item())
+
+            	loss = rl_loss(p10_policy_model, p10_target_model, p10_replay_buffer, p10_rl_optimizer)
+            	p10_rl_loss_list.append(loss.item())
+
+            	loss = rl_loss(p11_policy_model, p11_target_model, p11_replay_buffer, p11_rl_optimizer)
+            	p11_rl_loss_list.append(loss.item())
+
+            	#updating average strategy
+            	loss = sl_loss(p00_policy, p00_reservoir_buffer, p00_sl_optimizer)
+            	p00_sl_loss_list.append(loss.item())
+
+            	loss = sl_loss(p01_policy, p01_reservoir_buffer, p01_sl_optimizer)
+            	p01_sl_loss_list.append(loss.item())
+
+            	loss = sl_loss(p10_policy, p10_reservoir_buffer, p10_sl_optimizer)
+            	p10_sl_loss_list.append(loss.item())
+
+            	loss = sl_loss(p11_policy, p11_reservoir_buffer, p11_sl_optimizer)
+            	p11_sl_loss_list.append(loss.item())
 
 
-			if episode % args.update_target == 0:
+			if episode % 10 == 0:
 	            p00_target_model.load_state_dict(p00_policy_model.state_dict())
+            	torch.save(p00_policy_model.state_dict(), "models/p00-network-{}.pth".format(episode))
 	            p01_target_model.load_state_dict(p01_policy_model.state_dict())
+	            torch.save(p01_policy_model.state_dict(), "models/p01-network-{}.pth".format(episode))
 	            p10_target_model.load_state_dict(p10_policy_model.state_dict())
+	            torch.save(p10_policy_model.state_dict(), "models/p10-network-{}.pth".format(episode))
 	            p11_target_model.load_state_dict(p11_policy_model.state_dict())
+	            torch.save(p11_policy_model.state_dict(), "models/p11-network-{}.pth".format(episode))
 
-	        #need to save files
+	            torch.save(p00_pgn.state_dict(), "policies/p00-network-{}.pth".format(episode))
+	            torch.save(p01_pgn.state_dict(), "policies/p01-network-{}.pth".format(episode))
+	            torch.save(p10_pgn.state_dict(), "policies/p10-network-{}.pth".format(episode))
+	            torch.save(p11_pgn.state_dict(), "policies/p11-network-{}.pth".format(episode))
 
-
-
-
-
-
-
-
-
-
+	        #save models
+	        if episode % 10000 == 0:
+	        	p00_reward_list.clear(), p01_reward_list.clear(), p10_reward_list.clear(), p11_reward_list.clear()
+            	p00_rl_loss_list.clear(), p01_rl_loss_list.clear(), p10_rl_loss_list.clear(), p11_rl_loss_list.clear()
+            	p00_sl_loss_list.clear(), p01_sl_loss_list.clear(), p10_sl_loss_list.clear(), p11_sl_loss_list.clear()
 
 
 
