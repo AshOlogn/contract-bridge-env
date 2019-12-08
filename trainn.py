@@ -1,47 +1,3 @@
-def __init__(self, i_h = 144, i_w = 256, n_a = 7):
-        super(DeepQNetwork, self).__init__()
-        self.fx = nn.Sequential(
-            nn.Conv2d(3, 16, 5, 2),
-            nn.BatchNorm2d(16),
-            nn.ReLU(),
-            nn.Conv2d(16, 32, 5, 2),
-            nn.BatchNorm2d(32),
-            nn.ReLU(),
-            nn.Conv2d(32, 32, 5, 2),
-            nn.BatchNorm2d(32),
-            nn.ReLU(),
-            nn.Conv2d(32, 64, 5, 2),
-            nn.BatchNorm2d(64),
-            nn.ReLU()
-        )
-
-        def out_comp(ins, ks, s):
-            return (ins - (ks - 1) - 1) // s + 1
-        
-        def adj_size(ins, convs, ks = 5, s = 2):
-            sz = ins
-            for _ in range(convs):
-                sz = out_comp(sz, ks, s)
-            return sz
-
-        l_i = adj_size(i_h, 4) * adj_size(i_w, 4) * 64 + 9
-
-        self.cl = nn.Sequential(
-            nn.Linear(l_i, 2048),
-            nn.ReLU(),
-            nn.Linear(2048, 64),
-            nn.ReLU(),
-            nn.Linear(64, n_a)
-        )
-
-    def forward(self, x, gps_md):
-        # x contains three 3 x 144 x 256 image
-        x = self.fx(x)
-        ifx = x.view(x.shape[0], -1)
-        bsz = gps_md.shape[0]
-        gps_md = gps_md.unsqueeze(0).permute(1,0,2)
-        x = torch.cat([ifx, gps_md[:,:,0], gps_md[:,:,1], gps_md[:,:,2], gps_md[:,:,3], gps_md[:,:,4], gps_md[:,:,5], gps_md[:,:,6], gps_md[:,:,7], gps_md[:,:,8]], dim=1)
-        return self.cl(x)
 
 
 def env_reset(client):
@@ -70,7 +26,7 @@ def train(args):
     optimizer = optim.RMSprop(policy_network.parameters())
     criterion = nn.SmoothL1Loss()
     replay_memory = ReplayMemory(5000)
-
+    
     # connect to the AirSim simulator 
     #rotation_duration = 1
 
