@@ -2,6 +2,8 @@ import gym
 import torch 
 import torch.nn as nn
 from torch import optim 
+import numpy as np 
+import numpy.ma as ma 
 
 from contract_bridge.envs.bridge_trick_taking import BridgeEnv
 from nfsp.nn import DQN, PG
@@ -26,14 +28,13 @@ def train(n_episodes, epsilon=0.1):
     steps_done = 0
 
     device = torch.device('cpu')
-    #check after
     policy_dqn = DQN().to(device)
     target_dqn = DQN().to(device)
     target_dqn.load_state_dict(policy_dqn.state_dict())
 
     optimizer = optim.RMSprop(policy_dqn.parameters())
     criterion = nn.SmoothL1Loss()
-    replay_memory = ReplayMemory(130)
+    replay_memory = ReplayMemory(1300)
 
     #DQN is p_00, p_01 is a teammate, the rest are opponents
     players = {}
@@ -53,6 +54,7 @@ def train(n_episodes, epsilon=0.1):
         env.reset(bid_level, bid_trump, bid_team)
 
         for r in range(13):
+
             prev_dqn_state = None
             dqn_action = None
 
@@ -66,37 +68,25 @@ def train(n_episodes, epsilon=0.1):
 
                     #Epsilon-greedy action selection
                     if random.random() < 0:
-                        #random action (exploration)
 
-                        #convert this action to a tensor
-                        dqn_action = random.choice(env.hands['p_00'])
-
-                        env.play({'player': 'p_00', 'card': dqn_action})
-
+                        #pick a random card (exploration)
+                        card = random.choice(env.hands['p_00'])
+                        dqn_action = torch.LongTensor([env.card_to_index[card]])
+                        env.play({'player': 'p_00', 'card': card})
+                    
                     else:
                         #get the dqn output
                         output = policy_dqn.forward(prev_dqn_state)
 
-                        #mask out output[:mask_out_count] = (some high negative number)
-                        pred = nn.functional.softmax(output)
-
-                        #loop through hand and pick card with highest dqn output
-                        hand = env.hands['p_00']
-
-                        # dqn_action = hand[0]
-                        # score = output[0]
-                        score, dqn_action = torch.max(pred, dim = 0)
-                        print(dqn_action.item())
-                        #chosen out of index
-                        print(hand)
-                        card = env.hands['p_00'][dqn_action.item()]
-                        # for card in hand[1:]:
-                        #     if output[env.card_to_index[card]] > score:
-                        #         dqn_action = card 
-                        #         score = output[env.card_to_index[card]]
-                        
+                        #mask the output with the binary vector representing current hand
+                        mask = np.logical_not(env.hands_vector['p_00']).astype(int)
+                        output_masked = ma.masked_array(output.detach().numpy(), mask=mask)
+                        card_index = np.argmax(output_masked)
+                        dqn_action = torch.LongTensor([card_index])
+                        #chosen card at the index
+                        card = env.index_to_card[card_index]
                         env.play({'player': 'p_00', 'card': card})
-
+                
                 else:
                     card = players[pid].act()
                     env.play({'player': pid, 'card': card})
@@ -104,17 +94,15 @@ def train(n_episodes, epsilon=0.1):
             env.step('p_01')
             env.step('p_10')
             env.step('p_11')
-
             (obs, reward, done, info) = env.step('p_00')
 
             if r== 12 and episode % 50 == 0:
                 print(reward)
-
-            env.current_trick = []
+            
             reward_tensor = torch.tensor([reward], device=device)
             next_dqn_state = env.get_state('p_00')
-            print(type(next_dqn_state), type(dqn_action), type(prev_dqn_state), type(reward_tensor)) 
-            replay_memory.push(prev_dqn_state.unsqueeze(dim = 0), dqn_action.unsqueeze(dim = 0), reward_tensor.unsqueeze(dim = 0), next_dqn_state.unsqueeze(dim = 0))
+            replay_memory.push(prev_dqn_state.unsqueeze(dim = 0), dqn_action, 
+                reward_tensor.unsqueeze(dim = 0), next_dqn_state.unsqueeze(dim = 0))
 
             if len(replay_memory) > batch_size:
                 #get transitions of size "batch_size"
@@ -127,20 +115,15 @@ def train(n_episodes, epsilon=0.1):
                 state_batch = torch.cat(batch.state)
                 next_state_batch = torch.cat(batch.next_state)
                 action_batch = torch.cat(batch.action)
-                print(action_batch)
-                print(action_batch.shape)
                 reward_batch = torch.cat(batch.reward)
                 
-                # print(policy_dqn(state_batch))
                 q_values = policy_dqn(state_batch.to(device))
                 q_values = nn.functional.softmax(q_values, dim = 1)
-                print(q_values.shape)
 
                 q_values = q_values.gather(- 1, action_batch.unsqueeze(dim = 1))
                 
                 next_state_values = torch.zeros(batch_size, device=device)
                 next_out = target_dqn(next_states)
-                print(next_out.shape)
                 next_state_values[mask] = next_out.max(1)[0].detach()
                 expected_q_values = (next_state_values * gamma) + reward_batch.float()
 
@@ -153,6 +136,7 @@ def train(n_episodes, epsilon=0.1):
                     param.grad.data.clamp_(-1, 1)
                 
                 optimizer.step()
+                #print('updated replay')
         
         #print("Episode {} completed".format(episode))
         # update the target network based on the current policy

@@ -29,16 +29,14 @@ class BridgeEnv(gym.Env):
         #calculate the index of the current bid
         self.bid_index = ['C','D','H','S', None].index(bid_trump)*7 + (bid_level-7)
 
-        #create a dictionary mapping cards to index
-        suits_resorted = ['C','D','H','S']
-        if bid_trump is not None:
-            suits_resorted.append(suits_resorted.pop(suits_resorted.index(bid_trump)))
+        #create a list of cards in sorted order (an index -> card map)
+        self.index_to_card = sorted([Card(rank=x[0], suit=x[1], trump=bid_trump) 
+                for x in product(Card.ranks, Card.suits)])
 
+        #create a dictionary mapping cards to index
         self.card_to_index = {}
-        index = 0
-        for (rank,suit) in product(Card.ranks, Card.suits):
-            self.card_to_index[Card(rank,suit,bid_trump)] = index
-            index += 1
+        for index,card in enumerate(self.index_to_card):
+            self.card_to_index[card] = index
 
         #now initialize relevant variables for starting state (beginning of round)
         self.trick_history = []
@@ -212,6 +210,9 @@ class BridgeEnv(gym.Env):
             #the next player is the one who won this trick
             self.current_player = current_trick_sorted[0][0]
 
+            #clear the cards for current trick
+            self.current_trick = []
+
         else:
             #if the trick isn't over, the next player is the next player in the list (mod 4, of course)
             index = self.player_list.index(self.current_player)
@@ -227,8 +228,6 @@ class BridgeEnv(gym.Env):
         """
         player - one of 'p_00', 'p_01', 'p_10', or 'p_11'
         """
-        assert len(self.current_trick) == 4, "Trick not done!"
-
         if self.round_over:
             return (None, self.team0_score if int(player[2])==0 else self.team1_score, True, None)
         else:
