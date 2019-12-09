@@ -8,7 +8,7 @@ import numpy.ma as ma
 from contract_bridge.envs.bridge_trick_taking import BridgeEnv
 from nfsp.nn import DQN, PG
 from nfsp.buffers import ReplayMemory, Transition
-from agents.agent import SmartGreedyAgent
+from agents.agent import SmartGreedyAgent, RandomAgent
 
 import click
 import random
@@ -34,13 +34,13 @@ def train(n_episodes, epsilon=0.1):
 
     optimizer = optim.RMSprop(policy_dqn.parameters())
     criterion = nn.SmoothL1Loss()
-    replay_memory = ReplayMemory(1300)
+    replay_memory = ReplayMemory(52)
 
     #DQN is p_00, p_01 is a teammate, the rest are opponents
     players = {}
-    players['p_01'] = SmartGreedyAgent('p_01', env)
-    players['p_10'] = SmartGreedyAgent('p_10', env)
-    players['p_11'] = SmartGreedyAgent('p_11', env)
+    players['p_01'] = RandomAgent('p_01', env)
+    players['p_10'] = RandomAgent('p_10', env)
+    players['p_11'] = RandomAgent('p_11', env)
 
     #to determine ordering
     order = ['p_00', 'p_11', 'p_01', 'p_10']
@@ -50,6 +50,7 @@ def train(n_episodes, epsilon=0.1):
         #reset the environment with a new random bid
         bid_level = random.randint(7,13)
         bid_trump = random.choice(['C', 'D', 'H', 'S', None])
+        bid_trump = None
         bid_team = random.choice([0,1])
         env.reset(bid_level, bid_trump, bid_team)
 
@@ -92,7 +93,7 @@ def train(n_episodes, epsilon=0.1):
                     env.play({'player': pid, 'card': card})
             
             env.step('p_01')
-            env.step('p_10')
+            (_, op_reward, _, _)  = env.step('p_10')
             env.step('p_11')
             (obs, reward, done, info) = env.step('p_00')
 
@@ -119,7 +120,6 @@ def train(n_episodes, epsilon=0.1):
                 
                 q_values = policy_dqn(state_batch.to(device))
                 q_values = nn.functional.softmax(q_values, dim = 1)
-
                 q_values = q_values.gather(- 1, action_batch.unsqueeze(dim = 1))
                 
                 next_state_values = torch.zeros(batch_size, device=device)

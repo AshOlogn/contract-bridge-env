@@ -421,7 +421,6 @@ def train(n_episodes, env, epsilon = 0.1):
 
 
 
-
 if __name__ == '__main__':
     env = gym.make('contract_bridge:contract-bridge-v0')
     env.initialize(8, None, 0)

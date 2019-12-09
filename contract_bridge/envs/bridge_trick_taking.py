@@ -132,18 +132,18 @@ class BridgeEnv(gym.Env):
             right_current_trick[self.card_to_index[card]] = 1
 
         #the bid that was made for this round
-        bid = np.zeros((35,))
-        bid[self.bid_index] = 1
+        #bid = np.zeros((35,))
+        #bid[self.bid_index] = 1
 
         #whether this team or the opponent made the bid
         #index 0 is this team, 1 is the opponent
-        team = int(player[2])
-        bid_team = np.array([1,0] if self.bid_team==team else [0,1])
+        #team = int(player[2])
+        #bid_team = np.array([1,0] if self.bid_team==team else [0,1])
 
         #concatenate into 1 numpy array and convert into a PyTorch tensor
         concat_tuple = ((current_hand_vector, teammate_history_vector, left_history_vector, 
             right_history_vector, teammate_current_trick, left_current_trick,
-            right_current_trick, bid, bid_team))
+            right_current_trick))
         
         return Tensor(np.concatenate(concat_tuple))
 
@@ -221,8 +221,8 @@ class BridgeEnv(gym.Env):
         #if the round is over, calculate scores for each team based on the bid
         if len(self.trick_history) == 13:
             self.round_over = True
-            self.team0_score = self._calculate_score(0)
-            self.team1_score = self._calculate_score(1)
+            self.team0_score = 20 if self.team0_num_tricks > self.team1_num_tricks else -20 
+            self.team1_score = 20 if self.team1_num_tricks > self.team0_num_tricks else -20
 
     def step(self, player):
         """
@@ -231,4 +231,4 @@ class BridgeEnv(gym.Env):
         if self.round_over:
             return (None, self.team0_score if int(player[2])==0 else self.team1_score, True, None)
         else:
-            return (None, 1 if int(player[2])==self.trick_winner else 0, False, None)
+            return (None, 1 if int(player[2])==self.trick_winner else -1, False, None)

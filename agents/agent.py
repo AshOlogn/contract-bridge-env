@@ -74,15 +74,15 @@ class SmartGreedyAgent(Agent):
         #can't win, so might as well burn the lowest card
         return hand_sorted[0]
 
-def RandomAgent(Agent):
+class RandomAgent(Agent):
     def __init__(self, pid, env):
-        super()._init__(pid, env)
+        super().__init__(pid, env)
     
     def act(self):
         return random.choice(self.env.hands[self.pid])
 
-def NFSPAgent(Agent):
-    def __init(self, pid, env, dqn=DQN(), pg=PG()):
+class NFSPAgent(Agent):
+    def __init__(self, pid, env, dqn=DQN(), pg=PG()):
         super().__init__(pid, env)
         self.dqn = dqn
         self.pg = pg

@@ -5,7 +5,7 @@ import torch.nn.functional as F
 
 class DQN(nn.Module):
 
-    def __init__(self, dim=52*7+35+2):
+    def __init__(self, dim=364):
         super(DQN, self).__init__()
         self.fc1 = nn.Linear(dim, 300)
         self.fc2 = nn.Linear(300, 200)
@@ -19,7 +19,7 @@ class DQN(nn.Module):
 
 class PG(nn.Module):
 
-    def __init__(self, dim=52*7+35+2):
+    def __init__(self, dim=364):
         super(PG, self).__init__()
         self.fc1 = nn.Linear(dim, 300)
         self.fc2 = nn.Linear(300, 200)
