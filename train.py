@@ -17,9 +17,9 @@ import os
 def train(n_episodes, num, epsilon=0.1):
     env = gym.make('contract_bridge:contract-bridge-v0')
 
-    batch_size = 32
+    batch_size = 128
     gamma = 0.999
-    target_update = 1000 # update target network after 1000 episodes
+    target_update = 10000 # update target network after 1000 episodes
     steps_done = 0
 
     device = torch.device('cpu')
@@ -27,9 +27,9 @@ def train(n_episodes, num, epsilon=0.1):
     target_dqn = DQN().to(device)
     target_dqn.load_state_dict(policy_dqn.state_dict())
 
-    optimizer = optim.Adam(policy_dqn.parameters(), lr=0.001)
+    optimizer = optim.Adam(policy_dqn.parameters(), lr=0.0001)
     criterion = nn.SmoothL1Loss()
-    replay_memory = ReplayMemory(52)
+    replay_memory = ReplayMemory(100000)
 
     #DQN is p_00, p_01 is a teammate, the rest are opponents
     players = {}
@@ -65,7 +65,7 @@ def train(n_episodes, num, epsilon=0.1):
                     prev_dqn_state = env.get_state('p_00').to(device)
 
                     #Epsilon-greedy action selection
-                    if random.random() < 0:
+                    if random.random() < epsilon:
 
                         #pick a random card (exploration)
                         card = random.choice(env.hands['p_00'])
@@ -97,14 +97,14 @@ def train(n_episodes, num, epsilon=0.1):
             env.step('p_11')
             (obs, reward, done, info) = env.step('p_00')
 
-            if len(sliding_window) == 20:
+            if len(sliding_window) == 100:
                 sliding_window.pop(0)
                 sliding_window.append(1 if reward > op_reward else 0)
             else:
                 sliding_window.append(1 if reward > op_reward else 0)
-
-            if r == 12 and episode % 50 == 0 and len(sliding_window) == 20:
-                with open('logs/sliding-2/%d.txt' % num, 'a+') as f:
+            
+            if r == 12 and episode % 1000 == 0 and len(sliding_window) == 100:
+                with open('logs/sliding/%d.txt' % num, 'a+') as f:
                     f.write('%d %f\n' % (episode, sum(sliding_window)/len(sliding_window)))
             
             reward_tensor = torch.tensor([reward], device=device)
@@ -164,8 +164,8 @@ if __name__ == '__main__':
     if not os.path.exists("logs"):
         os.mkdir("logs")
     
-    for i in range(10):
+    for i in range(1):
         print('starting %d...' % i)
-        train(10000, i)
+        train(1000000, i)
     
     print('done')
