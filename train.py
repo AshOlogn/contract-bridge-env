@@ -19,7 +19,7 @@ def train(n_episodes, num, epsilon=0.1):
 
     batch_size = 128
     gamma = 0.999
-    target_update = 10000 # update target network after 1000 episodes
+    target_update = 1000 # update target network after 1000 episodes
     steps_done = 0
 
     device = torch.device('cpu')

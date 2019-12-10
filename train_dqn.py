@@ -22,15 +22,6 @@ def train(n_episodes, num, epsilon=0.1):
     target_update = 10000 # update target network after 1000 episodes
     steps_done = 0
 
-    device = torch.device('cpu')
-    policy_dqn = DQN().to(device)
-    target_dqn = DQN().to(device)
-    target_dqn.load_state_dict(policy_dqn.state_dict())
-
-    optimizer = optim.Adam(policy_dqn.parameters(), lr=0.0001)
-    criterion = nn.SmoothL1Loss()
-    replay_memory = ReplayMemory(100000)
-
     #DQN is p_00, p_01 is a teammate, the rest are opponents
     players = {}
     players['p_00'] = DQNAgent('p_00', env, epsilon=0.1, buffer_size=2000)
@@ -80,14 +71,13 @@ def train(n_episodes, num, epsilon=0.1):
             players['p_01'].process_step(reward)
             players['p_10'].process_step(reward)
             players['p_11'].process_step(reward)
-        
 
         #print("Episode {} completed".format(episode))
         # update the target network based on the current policy
         # also save the current policy network
         if episode % target_update == 0:
             target_dqn.load_state_dict(policy_dqn.state_dict())
-            torch.save(policy_dqn.state_dict(), "models/policy-network-{}.pth".format(episode))
+            torch.save(policy_dqn.state_dict(), "models/dqn/policy-network-%d.pth" % (episode))
 
     env.close()
 

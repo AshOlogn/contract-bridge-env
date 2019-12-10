@@ -104,7 +104,7 @@ def train(n_episodes, num, epsilon=0.1):
                 sliding_window.append(1 if reward > op_reward else 0)
             
             if r == 12 and episode % 1000 == 0 and len(sliding_window) == 100:
-                with open('logs/sliding-greedy/%d.txt' % num, 'a+') as f:
+                with open('logs/sliding-smart/%d.txt' % num, 'a+') as f:
                     f.write('%d %f\n' % (episode, sum(sliding_window)/len(sliding_window)))
             
             reward_tensor = torch.tensor([reward], device=device)
