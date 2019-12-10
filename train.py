@@ -14,16 +14,11 @@ import click
 import random
 import os
 
-@click.command()
-@click.option("--n_episodes", type=int, default=10000)
-def train(n_episodes, epsilon=0.1):
+def train(n_episodes, num, epsilon=0.1):
     env = gym.make('contract_bridge:contract-bridge-v0')
 
     batch_size = 32
     gamma = 0.999
-    eps_start = 0.9
-    eps_end = 0.05
-    eps_decay = 200
     target_update = 1000 # update target network after 1000 episodes
     steps_done = 0
 
@@ -32,7 +27,7 @@ def train(n_episodes, epsilon=0.1):
     target_dqn = DQN().to(device)
     target_dqn.load_state_dict(policy_dqn.state_dict())
 
-    optimizer = optim.RMSprop(policy_dqn.parameters())
+    optimizer = optim.Adam(policy_dqn.parameters(), lr=0.001)
     criterion = nn.SmoothL1Loss()
     replay_memory = ReplayMemory(52)
 
@@ -44,6 +39,8 @@ def train(n_episodes, epsilon=0.1):
 
     #to determine ordering
     order = ['p_00', 'p_11', 'p_01', 'p_10']
+
+    sliding_window = []
 
     for episode in range(n_episodes):
 
@@ -78,11 +75,14 @@ def train(n_episodes, epsilon=0.1):
                     else:
                         #get the dqn output
                         output = policy_dqn.forward(prev_dqn_state)
+                        hand = env.hands['p_00']
 
-                        #mask the output with the binary vector representing current hand
-                        mask = np.logical_not(env.hands_vector['p_00']).astype(int)
-                        output_masked = ma.masked_array(output.detach().numpy(), mask=mask)
-                        card_index = np.argmax(output_masked)
+                        card_index = None
+                        for card in hand:
+                            temp_index = env.card_to_index[card]
+                            if card_index is None or output[temp_index] > output[card_index]:
+                                card_index = temp_index
+
                         dqn_action = torch.LongTensor([card_index])
                         #chosen card at the index
                         card = env.index_to_card[card_index]
@@ -97,8 +97,15 @@ def train(n_episodes, epsilon=0.1):
             env.step('p_11')
             (obs, reward, done, info) = env.step('p_00')
 
-            if r== 12 and episode % 50 == 0:
-                print(reward)
+            if len(sliding_window) == 20:
+                sliding_window.pop(0)
+                sliding_window.append(1 if reward > op_reward else 0)
+            else:
+                sliding_window.append(1 if reward > op_reward else 0)
+
+            if r == 12 and episode % 50 == 0 and len(sliding_window) == 20:
+                with open('logs/sliding-2/%d.txt' % num, 'a+') as f:
+                    f.write('%d %f\n' % (episode, sum(sliding_window)/len(sliding_window)))
             
             reward_tensor = torch.tensor([reward], device=device)
             next_dqn_state = env.get_state('p_00')
@@ -157,4 +164,8 @@ if __name__ == '__main__':
     if not os.path.exists("logs"):
         os.mkdir("logs")
     
-    train()
+    for i in range(10):
+        print('starting %d...' % i)
+        train(10000, i)
+    
+    print('done')
