@@ -3,7 +3,11 @@ import sys
 import math
 import random
 import numpy as np
+import torch 
+from torch import nn, optim
+
 from nfsp.nn import DQN, PG
+from nfsp.buffers import ReplayMemory, Transition
 from contract_bridge.envs.bridge_trick_taking import BridgeEnv
 
 class Agent(object):
@@ -13,8 +17,6 @@ class Agent(object):
     def __init__(self, pid, env):
         self.pid = pid
         self.env = env
-        self.dqn = DQN()
-        self.pg = PG()
     
     def act(self):
         raise NotImplementedError()
@@ -81,12 +83,95 @@ class RandomAgent(Agent):
     def act(self):
         return random.choice(self.env.hands[self.pid])
 
-class NFSPAgent(Agent):
-    def __init__(self, pid, env, dqn=DQN(), pg=PG()):
+class DQNAgent(Agent):
+    def __init__(self, pid, env, epsilon=0.1, buffer_size=100000):
         super().__init__(pid, env)
-        self.dqn = dqn
-        self.pg = pg
+
+        #training variables
+        self.device = torch.device('cpu')
+        self.criterion = nn.SmoothL1Loss()
+        self.optimizer = optim.Adam(policy_dqn.parameters(), lr=0.0001)
+        self.gamma = 0.999
+        self.prev_state = None
+        self.action = None
+        self.batch_size = 128
+
+        #networks determine agent's behavior
+        self.policy_dqn = DQN().to(device)
+        self.target_dqn = DQN().to(device)
+        self.target_dqn.load_state_dict(self.policy_dqn.state_dict())
+        self.epsilon = epsilon
+
+        #used for experience replay
+        self.buffer_size = buffer_size
+        self.replay_memory = ReplayMemory(buffer_size)
     
     def act(self):
-        pass
+        #dqn agent
+        self.prev_state = self.env.get_state('p_00').to(self.device)
+
+        #Epsilon-greedy action selection
+        if random.random() < self.epsilon:
+
+            #pick a random card (exploration)
+            card = random.choice(self.env.hands['p_00'])
+            self.action = torch.LongTensor([self.env.card_to_index[card]])
+            return card
+        
+        else:
+            #get the dqn output
+            output = self.policy_dqn.forward(self.prev_state)
+            hand = self.env.hands['p_00']
+
+            #pick highest value card in the player's hand
+            card_index = None
+            for card in hand:
+                temp_index = self.env.card_to_index[card]
+                if card_index is None or output[temp_index] > output[card_index]:
+                    card_index = temp_index
+            
+            self.action = torch.LongTensor([card_index])
+            
+            #chosen card at the index
+            card = self.env.index_to_card[card_index]
+            return card
     
+    def process_step(self, reward):
+
+        reward_tensor = torch.tensor([reward], device=self.device)
+        next_dqn_state = self.env.get_state(self.pid)
+        self.replay_memory.push(self.prev_state.unsqueeze(dim = 0), self.action, 
+            reward_tensor.unsqueeze(dim = 0), next_dqn_state.unsqueeze(dim = 0))
+        
+        if len(self.replay_memory) > self.batch_size:
+            #get transitions of size "batch_size"
+            transitions = self.replay_memory.sample(self.batch_size)
+            batch = Transition(*zip(*transitions))
+            mask = torch.tensor(tuple(map(lambda s: s is not None, batch.next_state)), 
+                device=self.device, dtype=torch.uint8)
+
+            next_states = torch.cat([s for s in batch.next_state if s is not None]).to(self.device)
+            state_batch = torch.cat(batch.state)
+            next_state_batch = torch.cat(batch.next_state)
+            action_batch = torch.cat(batch.action)
+            reward_batch = torch.cat(batch.reward)
+            
+            q_values = self.policy_dqn(state_batch.to(self.device))
+            q_values = nn.functional.softmax(q_values, dim = 1)
+            q_values = q_values.gather(- 1, action_batch.unsqueeze(dim = 1))
+            
+            next_state_values = torch.zeros(batch_size, device=self.device)
+            next_out = self.target_dqn(next_states)
+            next_state_values[mask] = next_out.max(1)[0].detach()
+            expected_q_values = (next_state_values * gamma) + reward_batch.float()
+
+            #compute loss
+            loss = self.criterion(q_values, expected_q_values.unsqueeze(1))
+            self.optimizer.zero_grad()
+            loss.backward()
+
+            for param in self.policy_dqn.parameters():
+                param.grad.data.clamp_(-1, 1)
+            
+            self.optimizer.step()
+
