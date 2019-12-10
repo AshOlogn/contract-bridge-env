@@ -150,6 +150,8 @@ def train(n_episodes, num, epsilon=0.1):
         # also save the current policy network
         if episode % target_update == 0:
             target_dqn.load_state_dict(policy_dqn.state_dict())
+        
+        if episode % 10000 == 0:
             torch.save(policy_dqn.state_dict(), "models/policy-network-{}.pth".format(episode))
 
     env.close()
