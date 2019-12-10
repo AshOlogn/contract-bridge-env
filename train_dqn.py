@@ -16,11 +16,7 @@ import os
 
 def train(n_episodes, num, epsilon=0.1):
     env = gym.make('contract_bridge:contract-bridge-v0')
-
-    batch_size = 128
-    gamma = 0.999
-    target_update = 10000 # update target network after 1000 episodes
-    steps_done = 0
+    target_update = 1000 # update target network after 1000 episodes
 
     #DQN is p_00, p_01 is a teammate, the rest are opponents
     players = {}
@@ -64,7 +60,6 @@ def train(n_episodes, num, epsilon=0.1):
             if r == 12 and episode % 1000 == 0 and len(sliding_window) == 100:
                 with open('logs/sliding-dqn/%d.txt' % num, 'a+') as f:
                     f.write('%d %f\n' % (episode, sum(sliding_window)/len(sliding_window)))
-            
 
             #now update the networks of each of the agents
             players['p_00'].process_step(reward)
@@ -76,8 +71,13 @@ def train(n_episodes, num, epsilon=0.1):
         # update the target network based on the current policy
         # also save the current policy network
         if episode % target_update == 0:
-            target_dqn.load_state_dict(policy_dqn.state_dict())
-            torch.save(policy_dqn.state_dict(), "models/dqn/policy-network-%d.pth" % (episode))
+            for pid in order:
+                players[pid].target_update()
+
+        if episode % 10000 == 0:
+            for pid in order:
+                torch.save(players[pid].policy_dqn.state_dict(), "models/dqn/%s/policy-network-%d.pth" % (pid, episode))
+
 
     env.close()
 

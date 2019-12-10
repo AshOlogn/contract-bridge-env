@@ -87,20 +87,20 @@ class DQNAgent(Agent):
     def __init__(self, pid, env, epsilon=0.1, buffer_size=100000):
         super().__init__(pid, env)
 
-        #training variables
+        #networks determine agent's behavior
         self.device = torch.device('cpu')
+        self.policy_dqn = DQN().to(self.device)
+        self.target_dqn = DQN().to(self.device)
+        self.target_dqn.load_state_dict(self.policy_dqn.state_dict())
+        self.epsilon = epsilon
+        
+        #training variables
         self.criterion = nn.SmoothL1Loss()
-        self.optimizer = optim.Adam(policy_dqn.parameters(), lr=0.0001)
+        self.optimizer = optim.Adam(self.policy_dqn.parameters(), lr=0.0001)
         self.gamma = 0.999
         self.prev_state = None
         self.action = None
         self.batch_size = 128
-
-        #networks determine agent's behavior
-        self.policy_dqn = DQN().to(device)
-        self.target_dqn = DQN().to(device)
-        self.target_dqn.load_state_dict(self.policy_dqn.state_dict())
-        self.epsilon = epsilon
 
         #used for experience replay
         self.buffer_size = buffer_size
@@ -108,20 +108,20 @@ class DQNAgent(Agent):
     
     def act(self):
         #dqn agent
-        self.prev_state = self.env.get_state('p_00').to(self.device)
+        self.prev_state = self.env.get_state(self.pid).to(self.device)
 
         #Epsilon-greedy action selection
         if random.random() < self.epsilon:
 
             #pick a random card (exploration)
-            card = random.choice(self.env.hands['p_00'])
+            card = random.choice(self.env.hands[self.pid])
             self.action = torch.LongTensor([self.env.card_to_index[card]])
             return card
         
         else:
             #get the dqn output
             output = self.policy_dqn.forward(self.prev_state)
-            hand = self.env.hands['p_00']
+            hand = self.env.hands[self.pid]
 
             #pick highest value card in the player's hand
             card_index = None
@@ -160,10 +160,10 @@ class DQNAgent(Agent):
             q_values = nn.functional.softmax(q_values, dim = 1)
             q_values = q_values.gather(- 1, action_batch.unsqueeze(dim = 1))
             
-            next_state_values = torch.zeros(batch_size, device=self.device)
+            next_state_values = torch.zeros(self.batch_size, device=self.device)
             next_out = self.target_dqn(next_states)
             next_state_values[mask] = next_out.max(1)[0].detach()
-            expected_q_values = (next_state_values * gamma) + reward_batch.float()
+            expected_q_values = (next_state_values * self.gamma) + reward_batch.float()
 
             #compute loss
             loss = self.criterion(q_values, expected_q_values.unsqueeze(1))
@@ -174,4 +174,8 @@ class DQNAgent(Agent):
                 param.grad.data.clamp_(-1, 1)
             
             self.optimizer.step()
+    
+    def target_update(self):
+        #update target to match the policy
+        self.target_dqn.load_state_dict(self.policy_dqn.state_dict())
 
