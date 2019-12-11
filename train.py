@@ -7,8 +7,8 @@ import numpy.ma as ma
 import sys
 
 from contract_bridge.envs.bridge_trick_taking import BridgeEnv
-from nfsp.nn import DQN
-from nfsp.buffers import ReplayMemory, Transition
+from networks.nn import DQN
+from networks.buffers import ReplayMemory, Transition
 from agents.agent import SmartGreedyAgent, RandomAgent
 
 import click
@@ -165,9 +165,6 @@ if __name__ == '__main__':
         os.mkdir("logs")
     
     is_random = sys.argv[1] == 'random'
-
-    if not os.path.exists('logs/sliding-%s' % ('random' if is_random else 'smart')):
-        os.mkdir('logs/sliding-%s' % ('random' if is_random else 'smart'))
     
     if not os.path.exists('models/%s' % ('random' if is_random else 'smart')):
         os.mkdir('models/%s' % ('random' if is_random else 'smart'))

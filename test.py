@@ -5,7 +5,7 @@ from torch import optim
 import numpy as np 
 
 from contract_bridge.envs.bridge_trick_taking import BridgeEnv
-from nfsp.nn import DQN
+from networks.nn import DQN
 from agents.agent import DQNAgent, SmartGreedyAgent, RandomAgent
 
 import random

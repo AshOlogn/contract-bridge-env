@@ -6,11 +6,10 @@ import numpy as np
 import numpy.ma as ma
 
 from contract_bridge.envs.bridge_trick_taking import BridgeEnv
-from nfsp.nn import DQN, PG
-from nfsp.buffers import ReplayMemory, Transition
+from networks.nn import DQN
+from networks.buffers import ReplayMemory, Transition
 from agents.agent import DQNAgent
 
-import click
 import random
 import os
 

@@ -6,8 +6,8 @@ import numpy as np
 import torch 
 from torch import nn, optim
 
-from nfsp.nn import DQN
-from nfsp.buffers import ReplayMemory, Transition
+from networks.nn import DQN
+from networks.buffers import ReplayMemory, Transition
 from contract_bridge.envs.bridge_trick_taking import BridgeEnv
 
 class Agent(object):
