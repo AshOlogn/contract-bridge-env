@@ -8,7 +8,7 @@ Our repository is structured as follows:
 │   └── envs
 │       ├── bridge_trick_taking.py
 │       ├── deck.py
-├── nfsp
+├── networks
 │   ├── buffers.py
 │   ├── nn.py
 ├── trained_agents
