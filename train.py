@@ -7,7 +7,7 @@ import numpy.ma as ma
 import sys
 
 from contract_bridge.envs.bridge_trick_taking import BridgeEnv
-from nfsp.nn import DQN, PG
+from nfsp.nn import DQN
 from nfsp.buffers import ReplayMemory, Transition
 from agents.agent import SmartGreedyAgent, RandomAgent
 

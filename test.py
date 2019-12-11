@@ -5,7 +5,7 @@ from torch import optim
 import numpy as np 
 
 from contract_bridge.envs.bridge_trick_taking import BridgeEnv
-from nfsp.nn import DQN, PG
+from nfsp.nn import DQN
 from agents.agent import DQNAgent, SmartGreedyAgent, RandomAgent
 
 import random
@@ -73,7 +73,8 @@ def make_agents(word, team, env):
         return [DQNAgent(pids[0], env, mode='test', policy_dqn='trained_agents/dqn-smart.pth'), 
                 DQNAgent(pids[1], env, mode='test', policy_dqn='trained_agents/dqn-smart.pth')]
     elif word == 'dqn-self-play':
-        raise Exception()
+        return [DQNAgent(pids[0], env, mode='test', policy_dqn='trained_agents/dqn-self-play.pth'), 
+                DQNAgent(pids[1], env, mode='test', policy_dqn='trained_agents/dqn-self-play.pth')]
 
     raise Exception()
 

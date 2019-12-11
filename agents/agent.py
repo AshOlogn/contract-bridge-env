@@ -6,7 +6,7 @@ import numpy as np
 import torch 
 from torch import nn, optim
 
-from nfsp.nn import DQN, PG
+from nfsp.nn import DQN
 from nfsp.buffers import ReplayMemory, Transition
 from contract_bridge.envs.bridge_trick_taking import BridgeEnv
 
