@@ -84,12 +84,20 @@ class RandomAgent(Agent):
         return random.choice(self.env.hands[self.pid])
 
 class DQNAgent(Agent):
-    def __init__(self, pid, env, epsilon=0.1, buffer_size=100000):
+    def __init__(self, pid, env, mode='train', policy_dqn=None, epsilon=0.1, buffer_size=100000):
         super().__init__(pid, env)
+
+        self.mode = mode
 
         #networks determine agent's behavior
         self.device = torch.device('cpu')
-        self.policy_dqn = DQN().to(self.device)
+
+        if type(policy_dqn) == str:
+            self.policy_dqn = DQN().to(self.device)
+            self.policy_dqn.load_state_dict(torch.load(policy_dqn))
+        else:
+            self.policy_dqn = policy_dqn.to(device) if policy_dqn is not None else DQN().to(self.device)
+        
         self.target_dqn = DQN().to(self.device)
         self.target_dqn.load_state_dict(self.policy_dqn.state_dict())
         self.epsilon = epsilon
@@ -101,6 +109,7 @@ class DQNAgent(Agent):
         self.prev_state = None
         self.action = None
         self.batch_size = 128
+        self.last_loss = None
 
         #used for experience replay
         self.buffer_size = buffer_size
@@ -111,7 +120,7 @@ class DQNAgent(Agent):
         self.prev_state = self.env.get_state(self.pid).to(self.device)
 
         #Epsilon-greedy action selection
-        if random.random() < self.epsilon:
+        if self.mode == 'train' and random.random() < self.epsilon:
 
             #pick a random card (exploration)
             card = random.choice(self.env.hands[self.pid])
@@ -143,18 +152,18 @@ class DQNAgent(Agent):
         self.replay_memory.push(self.prev_state.unsqueeze(dim = 0), self.action, 
             reward_tensor.unsqueeze(dim = 0), next_dqn_state.unsqueeze(dim = 0))
         
-        if len(self.replay_memory) > self.batch_size:
+        if len(self.replay_memory) >= self.batch_size:
             #get transitions of size "batch_size"
             transitions = self.replay_memory.sample(self.batch_size)
             batch = Transition(*zip(*transitions))
             mask = torch.tensor(tuple(map(lambda s: s is not None, batch.next_state)), 
-                device=self.device, dtype=torch.uint8)
+                device=self.device, dtype=torch.bool)
 
             next_states = torch.cat([s for s in batch.next_state if s is not None]).to(self.device)
             state_batch = torch.cat(batch.state)
             next_state_batch = torch.cat(batch.next_state)
             action_batch = torch.cat(batch.action)
-            reward_batch = torch.cat(batch.reward)
+            reward_batch = torch.cat(batch.reward).squeeze(1)
             
             q_values = self.policy_dqn(state_batch.to(self.device))
             q_values = nn.functional.softmax(q_values, dim = 1)
@@ -166,7 +175,7 @@ class DQNAgent(Agent):
             expected_q_values = (next_state_values * self.gamma) + reward_batch.float()
 
             #compute loss
-            loss = self.criterion(q_values, expected_q_values.unsqueeze(1))
+            loss = self.criterion(q_values.squeeze(1), expected_q_values)
             self.optimizer.zero_grad()
             loss.backward()
 
@@ -174,6 +183,7 @@ class DQNAgent(Agent):
                 param.grad.data.clamp_(-1, 1)
             
             self.optimizer.step()
+            self.last_loss = loss.item()
     
     def target_update(self):
         #update target to match the policy

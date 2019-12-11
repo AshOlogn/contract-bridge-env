@@ -4,6 +4,7 @@ import torch.nn as nn
 from torch import optim 
 import numpy as np 
 import numpy.ma as ma 
+import sys
 
 from contract_bridge.envs.bridge_trick_taking import BridgeEnv
 from nfsp.nn import DQN, PG
@@ -14,7 +15,7 @@ import click
 import random
 import os
 
-def train(n_episodes, num, epsilon=0.1):
+def train(n_episodes, is_random, epsilon=0.1):
     env = gym.make('contract_bridge:contract-bridge-v0')
 
     batch_size = 128
@@ -33,13 +34,12 @@ def train(n_episodes, num, epsilon=0.1):
 
     #DQN is p_00, p_01 is a teammate, the rest are opponents
     players = {}
-    players['p_01'] = RandomAgent('p_01', env)
-    players['p_10'] = RandomAgent('p_10', env)
-    players['p_11'] = RandomAgent('p_11', env)
+    players['p_01'] = RandomAgent('p_01', env) if is_random else SmartGreedyAgent('p_01', env)
+    players['p_10'] = RandomAgent('p_10', env) if is_random else SmartGreedyAgent('p_10', env)
+    players['p_11'] = RandomAgent('p_11', env) if is_random else SmartGreedyAgent('p_11', env)
 
     #to determine ordering
     order = ['p_00', 'p_11', 'p_01', 'p_10']
-
     sliding_window = []
 
     for episode in range(n_episodes):
@@ -104,7 +104,7 @@ def train(n_episodes, num, epsilon=0.1):
                 sliding_window.append(1 if reward > op_reward else 0)
             
             if r == 12 and episode % 1000 == 0 and len(sliding_window) == 100:
-                with open('logs/sliding/%d.txt' % num, 'a+') as f:
+                with open('logs/%s.txt' % ('sliding-random' if is_random else 'sliding-smart'), 'a+') as f:
                     f.write('%d %f\n' % (episode, sum(sliding_window)/len(sliding_window)))
             
             reward_tensor = torch.tensor([reward], device=device)
@@ -117,25 +117,24 @@ def train(n_episodes, num, epsilon=0.1):
                 transitions = replay_memory.sample(batch_size)
                 batch = Transition(*zip(*transitions))
                 mask = torch.tensor(tuple(map(lambda s: s is not None, batch.next_state)), 
-                    device=device, dtype=torch.uint8)
-
+                    device=device, dtype=torch.bool)
+                
                 next_states = torch.cat([s for s in batch.next_state if s is not None]).to(device)
                 state_batch = torch.cat(batch.state)
                 next_state_batch = torch.cat(batch.next_state)
                 action_batch = torch.cat(batch.action)
-                reward_batch = torch.cat(batch.reward)
+                reward_batch = torch.cat(batch.reward).squeeze(1)
                 
                 q_values = policy_dqn(state_batch.to(device))
-                q_values = nn.functional.softmax(q_values, dim = 1)
-                q_values = q_values.gather(- 1, action_batch.unsqueeze(dim = 1))
+                q_values = q_values.gather(-1, action_batch.unsqueeze(dim = 1))
                 
                 next_state_values = torch.zeros(batch_size, device=device)
                 next_out = target_dqn(next_states)
                 next_state_values[mask] = next_out.max(1)[0].detach()
-                expected_q_values = (next_state_values * gamma) + reward_batch.float()
+                expected_q_values = ((next_state_values * gamma) + reward_batch.float())
 
                 #compute loss
-                loss = criterion(q_values, expected_q_values.unsqueeze(1))
+                loss = criterion(q_values.squeeze(1), expected_q_values)
 
                 optimizer.zero_grad()
                 loss.backward()
@@ -143,16 +142,15 @@ def train(n_episodes, num, epsilon=0.1):
                     param.grad.data.clamp_(-1, 1)
                 
                 optimizer.step()
-                #print('updated replay')
+                
         
-        #print("Episode {} completed".format(episode))
         # update the target network based on the current policy
         # also save the current policy network
         if episode % target_update == 0:
             target_dqn.load_state_dict(policy_dqn.state_dict())
         
         if episode % 10000 == 0:
-            torch.save(policy_dqn.state_dict(), "models/policy-network-{}.pth".format(episode))
+            torch.save(policy_dqn.state_dict(), "models/%s/policy-network-%d.pth" % ('random' if is_random else 'smart', episode))
 
     env.close()
 
@@ -166,8 +164,13 @@ if __name__ == '__main__':
     if not os.path.exists("logs"):
         os.mkdir("logs")
     
-    for i in range(1):
-        print('starting %d...' % i)
-        train(1000000, i)
+    is_random = sys.argv[1] == 'random'
+
+    if not os.path.exists('logs/sliding-%s' % ('random' if is_random else 'smart')):
+        os.mkdir('logs/sliding-%s' % ('random' if is_random else 'smart'))
     
+    if not os.path.exists('models/%s' % ('random' if is_random else 'smart')):
+        os.mkdir('models/%s' % ('random' if is_random else 'smart'))
+    
+    train(100000, is_random)
     print('done')
